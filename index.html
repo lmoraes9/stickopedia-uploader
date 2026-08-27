@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stickopedia uploader</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { max-width: 42rem; margin: 3rem auto; padding: 0 1.25rem;
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+  .sub { opacity: .7; margin-top: 0; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; }
+  code { background: rgba(127,127,127,.18); padding: .1em .35em; border-radius: 3px; }
+  footer { margin-top: 3rem; font-size: .9rem; opacity: .7; }
+</style>
+</head>
+<body>
+
+<h1>stickopedia uploader</h1>
+<p class="sub">A personal script that publishes my own videos to my own YouTube channels.</p>
+
+<h2>What it does</h2>
+<p>
+  I make pixel-art science explainer videos. They are rendered on my computer, and each one has a
+  written title, description, tag list and thumbnail prepared alongside it. This tool reads those
+  files and uploads the finished video to the YouTube channel it belongs to, scheduled for a
+  publication date I choose.
+</p>
+<p>
+  It exists to remove the copy-and-paste step between the folder where a video is produced and the
+  YouTube upload form. That is its entire purpose.
+</p>
+
+<h2>Who uses it</h2>
+<p>
+  Only me. It is not a product, it is not offered to anyone else, and it has no users other than
+  the owner of the channels it publishes to. It runs from a command line on a single computer.
+</p>
+
+<h2>What access it asks for</h2>
+<p>
+  It requests the YouTube scopes needed to upload a video and set its thumbnail
+  (<code>youtube.upload</code> and <code>youtube</code>) on channels I own. It does not read,
+  modify or access anyone else's YouTube data.
+</p>
+
+<h2>Privacy</h2>
+<p>
+  It collects nothing. The full statement is here:
+  <a href="privacy.html">Privacy Policy</a>.
+</p>
+
+<footer>
+  Contact: leonardo.lamoraes@gmail.com
+</footer>
+
+</body>
+</html>
