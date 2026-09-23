@@ -1,0 +1,678 @@
+<title>Urso no Laboratório</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  :root {
+    --bg: #E2D3B4;
+    --ink: #2B2118;
+    --muted: #6E5C45;
+    --pen: #2E5E9E;
+    --card: #F6EFDF;
+    --line: #CBB892;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C1814; --ink: #F0E7D7; --muted: #A8977E; --pen: #93B6EA;
+      --card: #29231D; --line: #4A3F33; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1814; --ink: #F0E7D7; --muted: #A8977E; --pen: #93B6EA;
+    --card: #29231D; --line: #4A3F33; color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--ink); margin: 0;
+    font: 15px/1.55 "Atkinson Hyperlegible", system-ui, sans-serif;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px;
+          display: flex; flex-direction: column; gap: 14px; }
+  header h1 { font: 700 2.6rem/1 Caveat, "Comic Sans MS", cursive; margin: 0; color: var(--pen);
+              text-wrap: balance; }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+  .stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1; border-radius: 4px;
+           overflow: hidden; background: #3F6F74;
+           box-shadow: 0 1px 0 rgba(0,0,0,.08), 0 14px 30px -12px rgba(40,25,10,.45); }
+  canvas { display: block; width: 100%; height: 100%; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  button { font: 700 14px/1 "Atkinson Hyperlegible", system-ui, sans-serif; color: var(--ink);
+           background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+           padding: 9px 14px; cursor: pointer; }
+  button:hover { border-color: var(--pen); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+  #scrub { flex: 1 1 180px; min-width: 0; accent-color: var(--pen); }
+  #clock { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 4.2em; text-align: right; }
+  .beats { display: flex; flex-wrap: wrap; gap: 6px; }
+  .beats button { font-weight: 400; padding: 6px 11px; font-size: 13px; }
+  .beats button b { color: var(--pen); font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .note { color: var(--muted); font-size: 13px; margin: 0; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Urso no laboratório</h1>
+    <p>Cena de teste em papel recortado: 10 segundos em loop, cada quadro desenhado em Canvas 2D, sem imagens nem vídeo.</p>
+  </header>
+
+  <div class="stage"><canvas id="stage" aria-label="Um urso de jaleco observa um frasco borbulhar; o frasco solta uma nuvem e uma estrela, que o urso pega e comemora."></canvas></div>
+
+  <div class="controls">
+    <button id="play" type="button" aria-label="Pausar">Pausar</button>
+    <input id="scrub" type="range" min="0" max="10" step="0.01" value="0" aria-label="Posição na cena">
+    <span id="clock">0,0 s</span>
+    <button id="speed" type="button" aria-pressed="false">Câmera lenta</button>
+  </div>
+
+  <div class="beats" aria-label="Momentos da cena">
+    <button type="button" data-t="0"><b>0,0</b>calmo</button>
+    <button type="button" data-t="1.6"><b>1,6</b>curiosidade</button>
+    <button type="button" data-t="3.4"><b>3,4</b>vai estourar</button>
+    <button type="button" data-t="4.2"><b>4,2</b>puf!</button>
+    <button type="button" data-t="5.0"><b>5,0</b>a estrela cai</button>
+    <button type="button" data-t="6.9"><b>6,9</b>eureca</button>
+    <button type="button" data-t="8.8"><b>8,8</b>virada de página</button>
+  </div>
+  <p class="note">Espaço pausa e continua. Os botões acima pulam para cada momento.</p>
+</div>
+
+<script>
+(() => {
+const W = 1000, LOOP = 10;
+const cv = document.getElementById('stage');
+const ctx = cv.getContext('2d');
+let S = 1;
+
+const C = {
+  wall: '#3F6F74', wallB: '#46797E', wood: '#A36A42', woodDark: '#7C4C2E', woodLine: '#B87D52',
+  fur: '#B97A4B', furDark: '#8E5A36', furIn: '#E7C49A', muzzle: '#F1D8B1', dark: '#2E1C12',
+  coat: '#F7F3EA', coatShade: '#DCD4C2', plum: '#5A3D5C', lens: '#8FD0E0',
+  glass: '#DDEFEA', pink: '#E4577E', gold: '#F1B347', star: '#F4C24A', starLight: '#FADB7E',
+  smoke: '#FBF7EE', cheek: '#F0968C', paper: '#FBF7EE', pen: '#2E5E9E', red: '#D9453A',
+  steel: '#6F777D', steelDark: '#555C61', edge: '#FBF6EA', leaf: '#5E9E6B', pot: '#C9673F'
+};
+
+/* ---------- small maths ---------- */
+const cl = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t, a, b) => cl((t - a) / (b - a));
+const lerp = (a, b, u) => a + (b - a) * u;
+const frac = x => x - Math.floor(x);
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; };
+const E = {
+  l: u => u,
+  io: u => u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2,
+  o: u => 1 - Math.pow(1 - u, 3),
+  i: u => u * u * u,
+  back: u => { const c = 1.9; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); }
+};
+function key(t, ks) {
+  const mix = (a, b, u) => Array.isArray(a) ? a.map((v, i) => lerp(v, b[i], u)) : lerp(a, b, u);
+  if (t <= ks[0][0]) return ks[0][1];
+  for (let i = 1; i < ks.length; i++) {
+    const [t1, v1, e] = ks[i];
+    if (t <= t1) {
+      const [t0, v0] = ks[i - 1];
+      return mix(v0, v1, E[e || 'io'](t1 > t0 ? (t - t0) / (t1 - t0) : 1));
+    }
+  }
+  return ks[ks.length - 1][1];
+}
+function mixHex(a, b, u) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const A = p(a), B = p(b);
+  return 'rgb(' + A.map((v, i) => Math.round(lerp(v, B[i], u))).join(',') + ')';
+}
+
+/* ---------- paper cut-out toolkit ---------- */
+let BOIL = 0; // swaps every ~1/7 s so edges "boil" like stop motion
+const jit = (pts, amp, seed, still) => {
+  const b = still ? 0 : BOIL;
+  return pts.map((p, i) => [p[0] + rnd(seed + i * 1.37 + b * 17.3) * amp, p[1] + rnd(seed + i * 2.71 + b * 9.1 + 50) * amp]);
+};
+function trace(pts) {
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+function grow(pts, d) {
+  let cx = 0, cy = 0;
+  pts.forEach(p => { cx += p[0]; cy += p[1]; });
+  cx /= pts.length; cy /= pts.length;
+  return pts.map(([x, y]) => { const dx = x - cx, dy = y - cy, l = Math.hypot(dx, dy) || 1; return [x + dx / l * d, y + dy / l * d]; });
+}
+// One piece of paper: a torn light fibre edge with a soft drop shadow, then the coloured sheet.
+function paper(pts, fill, o = {}) {
+  const seed = o.seed || 0;
+  if (o.edge !== false) {
+    ctx.save();
+    if (o.shadow !== false) {
+      ctx.shadowColor = 'rgba(38,24,12,.32)'; ctx.shadowBlur = (o.blur || 8) * S;
+      ctx.shadowOffsetX = 1.5 * S; ctx.shadowOffsetY = (o.drop ?? 4) * S;
+    }
+    trace(jit(grow(pts, o.grow || 2.4), o.ea || 2.2, seed + 97, o.still));
+    ctx.fillStyle = o.edgeColor || C.edge; ctx.fill();
+    ctx.restore();
+  }
+  trace(jit(pts, o.amp ?? 1.1, seed, o.still));
+  ctx.fillStyle = fill; ctx.fill();
+}
+function ell(cx, cy, rx, ry, rot = 0, n) {
+  n = n || Math.max(18, Math.round((rx + ry) * Math.PI / 9));
+  const c = Math.cos(rot), s = Math.sin(rot), o = [];
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2, x = Math.cos(a) * rx, y = Math.sin(a) * ry;
+    o.push([cx + x * c - y * s, cy + x * s + y * c]);
+  }
+  return o;
+}
+function poly(v, step = 10) {
+  const o = [];
+  for (let i = 0; i < v.length; i++) {
+    const a = v[i], b = v[(i + 1) % v.length];
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let k = 0; k < n; k++) o.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+  }
+  return o;
+}
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  const o = [], arc = (cx, cy, a0) => { for (let i = 0; i <= 5; i++) { const a = a0 + i / 5 * Math.PI / 2; o.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } };
+  arc(x + w - r, y + r, -Math.PI / 2); arc(x + w - r, y + h - r, 0); arc(x + r, y + h - r, Math.PI / 2); arc(x + r, y + r, Math.PI);
+  return poly(o, 10);
+}
+function cap(ax, ay, bx, by, r) {
+  const a = Math.atan2(by - ay, bx - ax), o = [];
+  for (let i = 0; i <= 8; i++) { const t = a + Math.PI / 2 + i / 8 * Math.PI; o.push([ax + Math.cos(t) * r, ay + Math.sin(t) * r]); }
+  for (let i = 0; i <= 8; i++) { const t = a - Math.PI / 2 + i / 8 * Math.PI; o.push([bx + Math.cos(t) * r, by + Math.sin(t) * r]); }
+  return poly(o, 10);
+}
+function starPts(cx, cy, ro, ri, n, rot) {
+  const o = [];
+  for (let i = 0; i < n * 2; i++) { const r = i % 2 ? ri : ro, a = rot - Math.PI / 2 + i * Math.PI / n; o.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return poly(o, 9);
+}
+function line(pts, color, w) {
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+}
+const HAND = '"Caveat", "Comic Sans MS", cursive';
+
+/* ---------- textures made once ---------- */
+const grain = (() => {
+  const g = document.createElement('canvas'); g.width = g.height = 256;
+  const x = g.getContext('2d'), d = x.createImageData(256, 256);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const v = 226 + Math.random() * 29; d.data[i] = v; d.data[i + 1] = v - 2; d.data[i + 2] = v - 6; d.data[i + 3] = 255;
+  }
+  x.putImageData(d, 0, 0);
+  x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = .7;
+  for (let i = 0; i < 70; i++) {
+    const px = Math.random() * 256, py = Math.random() * 256, a = Math.random() * Math.PI;
+    x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * 9, py + Math.sin(a) * 9); x.stroke();
+  }
+  return g;
+})();
+let grainPat = null;
+
+/* ---------- timeline ---------- */
+const BLINKS = [0.95, 2.75, 5.95, 8.95];
+function heat(t) {
+  return key(t, [[0, .45], [1.6, .55], [3.4, 1.6, 'i'], [4.2, 3.2, 'i'], [4.26, .3, 'o']]);
+}
+function heatInt(t) { // accumulated boil, so bubble speed changes stay continuous
+  let s = 0; const n = Math.max(1, Math.ceil(t / .02)), h = t / n;
+  for (let i = 0; i < n; i++) s += heat((i + .5) * h) * h;
+  return s;
+}
+function starState(t) {
+  if (t < 4.2) return null;
+  if (t < 4.9) {
+    const u = seg(t, 4.2, 4.9), e = E.o(u);
+    return { x: lerp(730, 610, e), y: lerp(455, 185, e) - Math.sin(u * Math.PI) * 30,
+             s: E.back(seg(t, 4.2, 4.5)), r: Math.PI * 4 * E.o(u), face: 'o' };
+  }
+  if (t < 6.55) {
+    const u = seg(t, 4.9, 6.55), e = E.io(u);
+    return { x: lerp(610, 431, e) + Math.sin(u * Math.PI * 2) * 60 * (1 - u), y: lerp(185, 592, e),
+             s: 1, r: Math.sin(u * Math.PI * 3) * .45 * (1 - u), face: t < 5.6 ? 'o' : 'smile' };
+  }
+  const k = t - 6.55, sq = Math.exp(-k * 7) * Math.cos(k * 26) * .16;
+  return { x: 431, y: 592 + Math.sin(k * 3.1) * 3, s: 1, sx: 1 + sq, sy: 1 - sq, r: Math.sin(k * 2.2) * .05,
+           face: 'smile', glow: seg(t, 6.7, 7.3) };
+}
+
+function pose(t, T) {
+  const P = {};
+  P.lean = key(t, [[0, 0], [1.6, 0], [2.6, .07], [3.4, .075], [4.2, .095], [4.36, -.1, 'o'], [5.2, -.02], [6.55, 0], [6.8, .025, 'o'], [7.4, 0]]);
+  P.dy = key(t, [[0, 0], [4.2, 0], [4.33, -48, 'o'], [4.65, -8], [4.85, 0, 'o'], [6.55, 0], [6.68, 8, 'o'], [7.0, 0, 'back']]);
+  P.bob = Math.sin(T * Math.PI * 2 / 2.5) * 2.5;
+  P.tilt = key(t, [[0, 0], [1.6, 0], [2.4, .16, 'back'], [3.4, .15], [4.2, .1], [4.36, -.08, 'o'], [5.4, 0], [6.8, 0], [7.25, -.13, 'back'], [8.2, -.1], [8.6, -.13]]);
+  P.eyeS = key(t, [[0, 1], [3.4, 1], [4.1, 1.18], [4.3, 1.6, 'back'], [5.4, 1.25], [6.55, 1.05]]);
+  P.brow = key(t, [[0, 0], [1.6, 0], [2.2, 1, 'back'], [3.4, 1], [4.25, 1], [4.35, 1.7, 'o'], [5.4, 1.1], [6.8, .4], [7.2, .2]]);
+  P.ear = key(t, [[0, 0], [1.7, 0], [2.1, -8, 'back'], [3.4, -6], [4.25, -6], [4.35, -18, 'o'], [4.6, 4], [4.9, 0]]);
+  P.happy = seg(t, 6.9, 7.05);
+  P.earWig = P.happy * Math.sin(t * 16) * .12;
+  P.cheek = .25 + .75 * E.io(seg(t, 6.9, 7.3));
+  P.blink = Math.max(0, ...BLINKS.map(b => 1 - Math.abs(t - b) / .09));
+  // where the eyes look
+  let look = key(t, [[0, [.45, .3]], [1.6, [.45, .3]], [2.3, [1, .45]], [4.2, [1, .45]]]);
+  const st = starState(t);
+  if (st && t < 6.9) {
+    const hx = 430 + 40 * P.lean * 10, hy = 455 + P.dy;
+    const dx = st.x - hx, dy = st.y - hy, d = Math.hypot(dx, dy) || 1;
+    const k = seg(t, 4.3, 4.5);
+    look = [lerp(look[0], dx / d, k), lerp(look[1], dy / d, k)];
+  }
+  P.look = look;
+  if (t < 3.4) P.mouth = { k: 'w' };
+  else if (t < 4.2) P.mouth = { k: 'o', s: lerp(4, 8, seg(t, 3.4, 4.2)) };
+  else if (t < 5.6) P.mouth = { k: 'o', s: lerp(15, 9, E.io(seg(t, 4.3, 5.6))) };
+  else if (t < 6.9) P.mouth = { k: 'o', s: 6 };
+  else P.mouth = { k: 'grin', s: E.back(seg(t, 6.9, 7.2)) };
+  P.pawL = key(t, [[0, [335, 716]], [4.2, [335, 716]], [4.34, [300, 480], 'o'], [5.0, [310, 500]], [6.45, [386, 628]]]);
+  P.pawR = key(t, [[0, [525, 716]], [1.9, [525, 716]], [2.4, [488, 566], 'back'], [3.4, [488, 566]], [4.2, [492, 572]], [4.34, [565, 480], 'o'], [5.0, [555, 500]], [6.45, [476, 628]]]);
+  if (t > 2.5 && t < 3.4) P.pawR = [P.pawR[0], P.pawR[1] + Math.abs(Math.sin((t - 2.5) * 9)) * -5];
+  P.pawOpen = key(t, [[0, 0], [4.2, 0], [4.3, 1, 'o'], [6.2, 1], [6.5, 0]]);
+  return P;
+}
+
+/* ---------- scenery ---------- */
+function drawWall() {
+  ctx.fillStyle = C.wall; ctx.fillRect(-200, -200, 1400, 1400);
+  for (let i = 0; i < 8; i++) {
+    const x = -120 + i * 170;
+    paper(poly([[x, -200], [x + 80, -200], [x + 80, 900], [x, 900]], 16), C.wallB, { edge: false, still: true, seed: 300 + i, amp: 2.5 });
+  }
+}
+function drawPoster() {
+  ctx.save(); ctx.translate(210, 250); ctx.rotate(-.035);
+  paper(rr(-128, -98, 256, 196, 5), '#F6EFDD', { seed: 110, still: true });
+  ctx.fillStyle = '#9C8666'; ctx.font = '700 15px "Atkinson Hyperlegible", system-ui, sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText('TABELA PERIÓDICA', -108, -70);
+  const els = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg'];
+  const col = ['#E98A6B', '#8DB7C9', '#E9B85C', '#E9B85C', '#8CC08E', '#8CC08E', '#8CC08E', '#8CC08E', '#C49AD1', '#8DB7C9', '#E9B85C', '#E9B85C'];
+  els.forEach((e, i) => {
+    const cx = -108 + (i % 4) * 55, cy = -56 + Math.floor(i / 4) * 48;
+    paper(rr(cx, cy, 48, 42, 3), col[i], { edge: false, still: true, seed: 120 + i, amp: .8 });
+    ctx.fillStyle = '#3A2A1E'; ctx.font = '700 19px "Atkinson Hyperlegible", system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(e, cx + 24, cy + 23);
+  });
+  ctx.globalAlpha = .72;
+  paper(poly([[-140, -110], [-86, -118], [-82, -92], [-136, -84]]), '#F1D98A', { edge: false, still: true, seed: 140 });
+  paper(poly([[86, -118], [140, -110], [136, -84], [82, -92]]), '#F1D98A', { edge: false, still: true, seed: 141 });
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+function drawShelf() {
+  // jars first, plank in front of their bottoms
+  paper(rr(636, 214, 62, 92, 10), C.glass, { seed: 150, still: true });
+  paper(rr(642, 250, 50, 52, 8), '#6FA7D6', { edge: false, still: true, seed: 151 });
+  paper(rr(630, 204, 74, 16, 4), C.woodDark, { seed: 152, still: true });
+  paper(ell(752, 272, 32, 32), C.glass, { seed: 153, still: true });
+  paper(rr(742, 212, 20, 40, 3), C.glass, { seed: 154, still: true });
+  paper(ell(752, 280, 25, 20), '#8CC08E', { edge: false, still: true, seed: 155 });
+  [[-0.5, 60], [0, 70], [0.45, 58], [-.9, 44], [.9, 46]].forEach(([a, l], i) => {
+    ctx.save(); ctx.translate(852, 250); ctx.rotate(a);
+    paper(ell(0, -l / 2, 13, l / 2), i % 2 ? C.leaf : '#72B07A', { seed: 160 + i, still: true, blur: 4, drop: 2 });
+    ctx.restore();
+  });
+  paper(poly([[822, 248], [882, 248], [874, 304], [830, 304]]), C.pot, { seed: 166, still: true });
+  paper(rr(596, 302, 344, 18, 4), C.wood, { seed: 170, still: true, blur: 10, drop: 6 });
+  paper(poly([[620, 320], [648, 320], [620, 352]]), C.woodDark, { seed: 171, still: true, edge: false });
+  paper(poly([[888, 320], [916, 320], [916, 352]]), C.woodDark, { seed: 172, still: true, edge: false });
+}
+
+/* ---------- the bear ---------- */
+function tp(x, y, P) { // point on the leaning torso -> world
+  const px = 430, py = 800, a = P.lean, dx = x - px, dy = y + P.dy - py;
+  return [px + dx * Math.cos(a) - dy * Math.sin(a), py + dx * Math.sin(a) + dy * Math.cos(a)];
+}
+function drawBear(P) {
+  ctx.save();
+  ctx.translate(430, 800); ctx.rotate(P.lean); ctx.translate(-430, -800); ctx.translate(0, P.dy);
+  paper(ell(430, 580, 88, 40), C.fur, { seed: 11 });
+  paper(poly([[345, 585], [515, 585], [560, 600], [590, 640], [600, 820], [260, 820], [270, 640], [300, 600]], 12), C.coat, { seed: 12, blur: 10 });
+  paper(poly([[392, 586], [468, 586], [430, 672]], 8), C.fur, { seed: 13, edge: false });
+  paper(poly([[392, 586], [430, 672], [404, 694], [366, 602]], 8), C.coatShade, { seed: 14, blur: 4, drop: 2 });
+  paper(poly([[468, 586], [494, 602], [456, 694], [430, 672]], 8), C.coatShade, { seed: 15, blur: 4, drop: 2 });
+  paper(rr(488, 616, 9, 34, 3), C.red, { seed: 16, edge: false });
+  paper(rr(503, 622, 9, 30, 3), C.pen, { seed: 17, edge: false });
+  paper(rr(478, 640, 58, 44, 5), C.coatShade, { seed: 18, blur: 4, drop: 2 });
+  paper(ell(430, 700, 7, 7), C.coatShade, { seed: 19, edge: false });
+  ctx.save(); ctx.translate(430, 455 + P.bob); ctx.rotate(P.tilt); drawHead(P); ctx.restore();
+  ctx.restore();
+}
+function drawHead(P) {
+  [-1, 1].forEach(s => {
+    ctx.save(); ctx.translate(s * 86, -82 + P.ear); ctx.rotate(s * (P.ear * -.01 + P.earWig));
+    paper(ell(0, 0, 40, 40), C.fur, { seed: 21 + s });
+    paper(ell(2 * -s, 3, 22, 22), C.furIn, { edge: false, seed: 23 + s });
+    ctx.restore();
+  });
+  paper(ell(0, 0, 124, 112), C.fur, { seed: 25, blur: 10 });
+  // goggles pushed up on the forehead
+  ctx.save(); trace(ell(0, 0, 123, 111)); ctx.clip();
+  paper(rr(-130, -88, 260, 22, 6), C.plum, { edge: false, seed: 26 });
+  ctx.restore();
+  [-1, 1].forEach(s => {
+    paper(ell(s * 40, -77, 28, 26), C.plum, { seed: 27 + s, blur: 5, drop: 2 });
+    paper(ell(s * 40, -77, 19, 17), C.lens, { edge: false, seed: 29 + s });
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; trace(ell(s * 40 - 7, -84, 6, 3.5, -.4)); ctx.fill();
+  });
+  // brows
+  [-1, 1].forEach(s => {
+    const y = -38 - P.brow * 7;
+    line([[s * 30, y + 2 + P.happy * 2], [s * 44, y - 2 - P.brow * 1.5], [s * 58, y + 1 - P.brow * 2]], C.dark, 6);
+  });
+  // cheeks
+  ctx.globalAlpha = P.cheek * .85;
+  [-1, 1].forEach(s => { trace(ell(s * 78, 32, 17, 11)); ctx.fillStyle = C.cheek; ctx.fill(); });
+  ctx.globalAlpha = 1;
+  // eyes
+  [-1, 1].forEach(s => {
+    const ex = s * 44 + P.look[0] * 7, ey = -6 + P.look[1] * 5, k = P.eyeS;
+    if (P.happy > .5) {
+      ctx.beginPath(); ctx.moveTo(ex - 13, ey + 5); ctx.quadraticCurveTo(ex, ey - 13, ex + 13, ey + 5);
+      ctx.strokeStyle = C.dark; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.stroke();
+      return;
+    }
+    const ry = Math.max(1.8, 15 * k * (1 - P.blink * .92));
+    trace(ell(ex, ey, 11 * k, ry, 0, 24)); ctx.fillStyle = C.dark; ctx.fill();
+    if (P.blink < .5) {
+      ctx.fillStyle = '#fff';
+      trace(ell(ex - 3.5 * k, ey - 5 * k, 4 * k, 4 * k, 0, 12)); ctx.fill();
+      trace(ell(ex + 3.5 * k, ey + 5 * k, 1.8 * k, 1.8 * k, 0, 8)); ctx.fill();
+    }
+  });
+  // muzzle, nose, mouth
+  paper(ell(0, 40, 60, 46), C.muzzle, { seed: 31, grow: 1.6, blur: 5, drop: 2 });
+  paper(poly([[-19, 14], [19, 14], [5, 32], [-5, 32]], 6), C.dark, { edge: false, seed: 32 });
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; trace(ell(-6, 18, 5, 2.5)); ctx.fill();
+  line([[0, 31], [0, 42]], C.dark, 4.5);
+  const m = P.mouth;
+  if (m.k === 'w') {
+    ctx.beginPath(); ctx.moveTo(-17, 43); ctx.quadraticCurveTo(-8, 55, 0, 43); ctx.quadraticCurveTo(8, 55, 17, 43);
+    ctx.strokeStyle = C.dark; ctx.lineWidth = 4.5; ctx.lineCap = 'round'; ctx.stroke();
+  } else if (m.k === 'o') {
+    trace(ell(0, 48 + m.s * .7, m.s * .8, m.s, 0, 18)); ctx.fillStyle = C.dark; ctx.fill();
+  } else {
+    const g = m.s;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(-26, 43); ctx.quadraticCurveTo(0, 43 + 34 * g, 26, 43); ctx.quadraticCurveTo(0, 50, -26, 43); ctx.closePath();
+    ctx.fillStyle = C.dark; ctx.fill(); ctx.clip();
+    trace(ell(0, 43 + 24 * g, 13, 9 * g + 1)); ctx.fillStyle = '#E8747C'; ctx.fill();
+    ctx.restore();
+  }
+}
+function drawArms(P) {
+  [[tp(302, 628, P), P.pawL, -1], [tp(558, 628, P), P.pawR, 1]].forEach(([sh, pw, s], i) => {
+    const [sx, sy] = sh, [px, py] = pw;
+    paper(cap(sx, sy, px, py, 27), C.coat, { seed: 60 + i * 5, blur: 9 });
+    const a = .72, b = .86;
+    paper(cap(lerp(sx, px, a), lerp(sy, py, a), lerp(sx, px, b), lerp(sy, py, b), 29), C.coatShade, { seed: 61 + i * 5, blur: 3, drop: 1.5 });
+    paper(ell(px, py, 30, 28), C.fur, { seed: 62 + i * 5, blur: 6 });
+    const o = P.pawOpen;
+    if (o > .05) {
+      ctx.save(); ctx.translate(px, py); ctx.scale(o, o);
+      paper(ell(0, 6, 14, 11), C.muzzle, { edge: false, seed: 63 + i });
+      [[-13, -11], [0, -16], [13, -11]].forEach(([x, y], j) => paper(ell(x, y, 5.5, 5.5), C.muzzle, { edge: false, seed: 64 + j + i }));
+      ctx.restore();
+    } else {
+      [-8, 6].forEach(x => line([[px + x, py - 22], [px + x + 1, py - 12]], C.furDark, 3.5));
+    }
+  });
+}
+
+/* ---------- table and props ---------- */
+function drawTable() {
+  paper(poly([[-200, 720], [1200, 720], [1200, 1200], [-200, 1200]], 16), C.wood, { seed: 40, still: true, blur: 16, drop: -3 });
+  [[40, 820, 300], [520, 870, 380], [150, 950, 260], [700, 940, 300]].forEach(([x, y, w], i) =>
+    line([[x, y], [x + w * .5, y - 4 + i], [x + w, y]], C.woodLine, 3));
+  paper(poly([[-200, 736], [1200, 736], [1200, 748], [-200, 748]], 20), C.woodDark, { edge: false, still: true, seed: 41 });
+}
+function drawNotebook(t) {
+  ctx.save(); ctx.translate(560, 818); ctx.rotate(-.05);
+  paper(rr(-120, -72, 240, 150, 4), C.paper, { seed: 42, still: true });
+  ctx.strokeStyle = '#A9C3E2'; ctx.lineWidth = 1.6;
+  for (let y = -40; y < 78; y += 26) { ctx.beginPath(); ctx.moveTo(-116, y); ctx.lineTo(116, y); ctx.stroke(); }
+  ctx.strokeStyle = '#E39A9A'; ctx.beginPath(); ctx.moveTo(-86, -70); ctx.lineTo(-86, 76); ctx.stroke();
+  ctx.fillStyle = C.pen; ctx.font = '700 32px ' + HAND; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('hipótese:', -76, -16);
+  ctx.fillText(t < 7.6 ? 'vai brilhar?' : 'brilhou!', -76, 36);
+  ctx.restore();
+}
+function drawRack() {
+  const cols = ['#6DBF8B', C.star, '#8E6BBF'];
+  cols.forEach((c, i) => {
+    const x = 180 + i * 46;
+    paper(cap(x, 594, x, 688, 14), C.glass, { seed: 80 + i, blur: 5 });
+    paper(cap(x, 628 + i * 10, x, 688, 9), c, { edge: false, seed: 83 + i });
+  });
+  paper(rr(146, 652, 176, 22, 4), C.wood, { seed: 86, blur: 6 });
+  paper(rr(152, 674, 12, 46, 3), C.woodDark, { seed: 87, edge: false });
+  paper(rr(304, 674, 12, 46, 3), C.woodDark, { seed: 88, edge: false });
+}
+function drawPlate(t, T) {
+  paper(rr(655, 684, 150, 38, 8), C.steel, { seed: 50, blur: 8 });
+  paper(rr(655, 712, 150, 10, 4), C.steelDark, { seed: 51, edge: false });
+  paper(ell(690, 701, 10, 10), C.red, { seed: 52, edge: false });
+  line([[690, 701], [696, 694]], '#fff', 2.5);
+  const g = .5 + .5 * Math.sin(T * 9) * cl(heat(t) / 2);
+  ctx.globalAlpha = .35 + .65 * g; trace(ell(780, 701, 6, 6)); ctx.fillStyle = '#FF9A3C'; ctx.fill(); ctx.globalAlpha = 1;
+}
+const FLASK = [[-70, -6], [-62, 0], [62, 0], [70, -6], [24, -150], [24, -208], [31, -212], [31, -224], [-31, -224], [-31, -212], [-24, -208], [-24, -150]];
+function drawFlask(t, T) {
+  const shake = key(t, [[0, 0], [3.0, 0], [4.15, 1, 'i'], [4.22, 0]]);
+  let sy = 1 - .12 * E.io(seg(t, 3.95, 4.18));
+  if (t >= 4.2) { const k = t - 4.2; sy = 1 + .18 * Math.exp(-k * 8) * Math.cos(k * 32); }
+  const sx = 1 / Math.sqrt(sy);
+  ctx.save(); ctx.translate(730, 684);
+  ctx.rotate(Math.sin(T * 47) * .06 * shake + Math.sin(T * 31) * .008 * cl(heat(t) - .4));
+  ctx.scale(sx, sy);
+  const shape = poly(FLASK, 9);
+  paper(shape, C.glass, { seed: 55, blur: 9 });
+  const L = key(t, [[0, -96], [4.2, -100], [4.32, -44, 'o']]);
+  const col = mixHex(C.pink, C.gold, seg(t, 4.2, 4.6));
+  const H = heatInt(t), h = heat(t);
+  ctx.save(); trace(grow(shape, -5)); ctx.clip();
+  const surf = [];
+  for (let x = -80; x <= 80; x += 8) surf.push([x, L + Math.sin(x * .09 + T * 7) * (1.5 + h * 2.2)]);
+  paper([...surf, [80, 10], [-80, 10]], col, { edge: false, seed: 56 });
+  for (let i = 0; i < 9; i++) {
+    const ph = frac(H * .7 + i / 9 + rnd(i) * .1), y = -6 + ph * (L + 6);
+    const hw = 70 - 46 * cl(-y / 150);
+    const x = rnd(i + 3) * hw * .55 + Math.sin(ph * 6 + i) * 6;
+    trace(ell(x, y, 3 + (i % 3) * 2.2, 3 + (i % 3) * 2.2, 0, 10)); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
+  }
+  ctx.restore();
+  line([[-44, -28], [-20, -120]], 'rgba(255,255,255,.75)', 7);
+  [-40, -70, -100].forEach((y, i) => line([[34 - i * 8, y], [46 - i * 8, y]], 'rgba(46,28,18,.45)', 3));
+  // bubbles that jump out of the neck while it boils hard
+  if (t > 2.0 && t < 4.25) {
+    const amt = cl((h - .9) / 1.5);
+    for (let i = 0; i < 5; i++) {
+      const ph = frac(H * .9 + i / 5), r = (1 - ph) * 8 * amt;
+      if (r > .8) paper(ell(Math.sin(ph * 8 + i) * 12, -226 - ph * 70, r, r, 0, 10), col, { seed: 57 + i, blur: 3, drop: 1.5, grow: 1.6 });
+    }
+  }
+  ctx.restore();
+}
+function drawSteam(t, T) {
+  const vis = t < 4.0 ? 1 - seg(t, 3.6, 4.0) : seg(t, 6.0, 6.8);
+  if (vis <= 0) return;
+  for (let i = 0; i < 3; i++) {
+    const ph = frac(T / 1.25 + i / 3), r = (7 + ph * 16) * Math.sin(ph * Math.PI) * vis;
+    if (r > 1) paper(ell(730 + Math.sin(ph * 5 + i * 2) * 12, 452 - ph * 95, r, r * .9), C.smoke, { seed: 90 + i, blur: 5, drop: 2 });
+  }
+}
+function drawPoof(t) {
+  if (t < 4.2 || t > 6.3) return;
+  const conf = ['#E4577E', '#6FA7D6', C.star, '#8CC08E', '#C49AD1'];
+  for (let i = 0; i < 14; i++) {
+    const k = t - 4.2, a = -Math.PI / 2 + rnd(i + 40) * 1.3, v = 420 + rnd(i + 41) * 160;
+    const x = 730 + Math.cos(a) * v * k, y = 455 + Math.sin(a) * v * k + 520 * k * k;
+    const s = 1 - seg(t, 5.0 + (i % 4) * .12, 5.5 + (i % 4) * .12);
+    if (s <= 0) continue;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(k * (6 + i) + i); ctx.scale(s, s);
+    paper(rr(-8, -5, 16, 10, 2), conf[i % 5], { seed: 200 + i, blur: 3, drop: 2, grow: 1.4 });
+    ctx.restore();
+  }
+  for (let i = 0; i < 11; i++) {
+    const a = i / 11 * Math.PI * 2 + rnd(i) * .3, d = 62 + rnd(i + 9) * 34, r = 44 + rnd(i + 20) * 20;
+    const p = seg(t, 4.2, 4.55 + i * .02), shrink = 1 - E.i(seg(t, 4.95 + i * .06, 5.7 + i * .06));
+    const rad = r * E.back(p) * shrink;
+    if (rad < 1) continue;
+    paper(ell(730 + Math.cos(a) * d * E.o(p), 440 + Math.sin(a) * d * .7 * E.o(p) - 40 * seg(t, 4.2, 5.7), rad, rad * .92),
+          C.smoke, { seed: 220 + i, blur: 10 });
+  }
+}
+function drawStar(st, t) {
+  if (st.glow) {
+    const g = ctx.createRadialGradient(st.x, st.y, 10, st.x, st.y, 150);
+    const a = st.glow * (.35 + .1 * Math.sin(t * 5));
+    g.addColorStop(0, `rgba(255,226,130,${a})`); g.addColorStop(1, 'rgba(255,226,130,0)');
+    ctx.fillStyle = g; ctx.fillRect(st.x - 160, st.y - 160, 320, 320);
+  }
+  ctx.save(); ctx.translate(st.x, st.y); ctx.rotate(st.r); ctx.scale(st.s * (st.sx || 1), st.s * (st.sy || 1));
+  paper(starPts(0, 0, 64, 32, 5, 0), C.star, { seed: 70, blur: 10, edgeColor: '#FFF4D2' });
+  paper(starPts(-4, -6, 30, 15, 5, 0), C.starLight, { seed: 71, edge: false });
+  ctx.fillStyle = C.dark;
+  [-1, 1].forEach(s => { trace(ell(s * 11, 2, 4.5, st.face === 'o' ? 6 : 5, 0, 10)); ctx.fill(); });
+  ctx.globalAlpha = .8; ctx.fillStyle = C.cheek;
+  [-1, 1].forEach(s => { trace(ell(s * 21, 12, 6, 4, 0, 10)); ctx.fill(); });
+  ctx.globalAlpha = 1;
+  if (st.face === 'o') { trace(ell(0, 16, 4.5, 5.5, 0, 10)); ctx.fillStyle = C.dark; ctx.fill(); }
+  else { ctx.beginPath(); ctx.moveTo(-8, 12); ctx.quadraticCurveTo(0, 21, 8, 12); ctx.strokeStyle = C.dark; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.stroke(); }
+  ctx.restore();
+}
+function drawTab(x, y, s, rot, txt, color, seed) {
+  if (s <= .01) return;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  paper(ell(0, 0, 46, 46), C.paper, { seed, blur: 9 });
+  ctx.fillStyle = color; ctx.font = '700 78px ' + HAND; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(txt, 0, 4);
+  ctx.restore();
+}
+function drawEureka(t) {
+  const s = key(t, [[6.9, 0], [7.2, 1, 'back']]);
+  if (s <= .01) return;
+  ctx.save(); ctx.translate(430, 205); ctx.rotate(-.05); ctx.scale(s, s);
+  paper(rr(-170, -58, 340, 116, 4), C.paper, { seed: 95, blur: 12 });
+  const w = seg(t, 7.2, 8.1);
+  ctx.save(); ctx.beginPath(); ctx.rect(-160, -70, 320 * w, 150); ctx.clip();
+  ctx.fillStyle = C.pen; ctx.font = '700 96px ' + HAND; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('eureca!', 0, 6);
+  ctx.restore();
+  ctx.globalAlpha = .72;
+  paper(poly([[-188, -72], [-128, -80], [-122, -52], [-182, -44]]), '#F1D98A', { edge: false, seed: 96 });
+  paper(poly([[128, -80], [188, -72], [182, -44], [122, -52]]), '#F1D98A', { edge: false, seed: 97 });
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+function drawSparkles(t) {
+  if (t < 6.9) return;
+  const pts = [[250, 420], [610, 400], [640, 560], [230, 590], [520, 300], [340, 300]];
+  pts.forEach(([x, y], i) => {
+    const s = Math.max(0, Math.sin((t - 6.9) * 5 + i * 1.9)) * seg(t, 6.9, 7.3);
+    if (s < .05) return;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(i); ctx.scale(s, s);
+    paper(starPts(0, 0, 17, 5, 4, 0), i % 2 ? C.star : C.paper, { seed: 240 + i, blur: 4, drop: 2, grow: 1.4 });
+    ctx.restore();
+  });
+}
+function drawWipe(T) {
+  if (T < 8.8) return;
+  const left = T < 9.35 ? lerp(1060, -80, E.io(seg(T, 8.8, 9.35))) : lerp(-80, -1420, E.io(seg(T, 9.35, 10)));
+  const edge = (x0, dir) => { const o = []; for (let y = -20; y <= 1020; y += 14) o.push([x0 + rnd(y * .37 + dir) * 9, dir > 0 ? y : 1000 - y]); return o; };
+  const sheet = [...edge(left, 1), ...edge(left + 1320, -1)];
+  paper(sheet, '#F7F1E1', { seed: 260, blur: 24, drop: 0, ea: 4, grow: 5 });
+  ctx.save(); trace(sheet); ctx.clip();
+  ctx.strokeStyle = '#A9C3E2'; ctx.lineWidth = 2;
+  for (let y = 70; y < 1000; y += 46) { ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + 1320, y); ctx.stroke(); }
+  ctx.strokeStyle = '#E39A9A'; ctx.beginPath(); ctx.moveTo(left + 150, 0); ctx.lineTo(left + 150, 1000); ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- one frame ---------- */
+function draw(T) {
+  const t = T >= 9.35 ? 0 : T; // behind the page turn the scene resets for the next loop
+  BOIL = Math.floor(T * 7) % 3;
+  ctx.setTransform(S, 0, 0, S, 0, 0);
+  const P = pose(t, T), st = starState(t);
+  const z = key(t, [[0, 1.1], [1.6, 1.1], [3.6, 1.2], [4.2, 1.21, 'l'], [4.45, 1.06, 'o'], [5.3, 1.1], [6.8, 1.1], [7.6, 1.24], [9.35, 1.26]]);
+  const cx = key(t, [[0, 490], [1.6, 490], [3.6, 590], [4.2, 590, 'l'], [4.45, 490, 'o'], [6.8, 490], [7.6, 445]]);
+  const cy = key(t, [[0, 450], [1.6, 450], [3.6, 500], [4.2, 500, 'l'], [4.45, 450, 'o'], [6.8, 450], [7.6, 430]]);
+  const k = t - 4.2, amp = k > 0 ? 16 * Math.exp(-k * 7) : 0;
+  ctx.save();
+  ctx.translate(500 + Math.sin(k * 71) * amp, 500 + Math.cos(k * 57) * amp);
+  ctx.scale(z, z); ctx.translate(-cx, -cy);
+  drawWall(); drawPoster(); drawShelf();
+  drawBear(P);
+  drawTable(); drawNotebook(t); drawRack(); drawPlate(t, T); drawFlask(t, T); drawSteam(t, T);
+  drawPoof(t);
+  if (st && t >= 6.55) drawStar(st, t);
+  drawArms(P);
+  if (st && t < 6.55) drawStar(st, t);
+  drawTab(585, 300, key(t, [[2.0, 0], [2.35, 1, 'back'], [3.2, 1], [3.4, 0]]), .18 + Math.sin(t * 4) * .06, '?', C.pen, 100);
+  drawTab(285, 290, key(t, [[4.22, 0], [4.45, 1, 'back'], [5.3, 1], [5.5, 0]]), -.15 + Math.sin(t * 9) * .05, '!', C.red, 101);
+  drawEureka(t); drawSparkles(t);
+  ctx.restore();
+  drawWipe(T);
+  if (!grainPat) grainPat = ctx.createPattern(grain, 'repeat');
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .6;
+  ctx.fillStyle = grainPat; ctx.fillRect(0, 0, W, W); ctx.restore();
+  const v = ctx.createRadialGradient(500, 470, 380, 500, 500, 760);
+  v.addColorStop(0, 'rgba(30,15,5,0)'); v.addColorStop(1, 'rgba(30,15,5,.3)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, W);
+}
+
+/* ---------- playback ---------- */
+const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub');
+const clock = document.getElementById('clock'), speedBtn = document.getElementById('speed');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let cur = reduce ? 7.6 : 0, playing = !reduce, speed = 1, last = null;
+
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const px = Math.max(300, Math.round(r.width * dpr));
+  if (cv.width !== px) { cv.width = cv.height = px; grainPat = null; }
+  S = px / W;
+}
+function show() {
+  draw(cur);
+  scrub.value = cur.toFixed(2);
+  clock.textContent = cur.toFixed(1).replace('.', ',') + ' s';
+  playBtn.textContent = playing ? 'Pausar' : 'Tocar';
+  playBtn.setAttribute('aria-label', playing ? 'Pausar' : 'Tocar');
+}
+function tick(now) {
+  if (playing) {
+    if (last != null) cur = (cur + Math.min(.1, (now - last) / 1000) * speed) % LOOP;
+    last = now; show();
+  } else last = null;
+  requestAnimationFrame(tick);
+}
+playBtn.addEventListener('click', () => { playing = !playing; show(); });
+scrub.addEventListener('input', () => { cur = +scrub.value; show(); });
+speedBtn.addEventListener('click', () => {
+  speed = speed === 1 ? .35 : 1;
+  speedBtn.setAttribute('aria-pressed', speed !== 1);
+  speedBtn.textContent = speed === 1 ? 'Câmera lenta' : 'Velocidade normal';
+});
+document.querySelectorAll('.beats button').forEach(b => b.addEventListener('click', () => { cur = +b.dataset.t; show(); }));
+addEventListener('keydown', e => {
+  if (e.code === 'Space' && !/INPUT|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); playing = !playing; show(); }
+});
+addEventListener('resize', () => { resize(); show(); });
+
+// hook for rendering exact frames to video
+window.__frame = (T, px) => { playing = false; cv.width = cv.height = px; grainPat = null; S = px / W; draw(T); };
+
+resize(); show();
+(document.fonts ? Promise.race([document.fonts.load('700 96px Caveat'), new Promise(r => setTimeout(r, 1500))]) : Promise.resolve())
+  .then(() => { show(); requestAnimationFrame(tick); });
+})();
+</script>
